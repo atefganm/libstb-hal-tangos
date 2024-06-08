@@ -17,6 +17,7 @@
 #include <sys/ioctl.h>
 
 #include <hardware_caps.h>
+#include <proc_tools.h>
 
 #define FP_DEV "/dev/dbox/oled0"
 static int initialized = 0;
@@ -97,7 +98,43 @@ hw_caps_t *get_hwcaps(void)
 	strcpy(caps.boxvendor, "DM");
 	strcpy(caps.boxname, "820HD");
 	strcpy(caps.boxarch, "BCM7434");
+#elif BOXMODEL_DM7080
+	initialized = 1;
+	caps.has_CI = 2;
+	caps.can_cec = 1;
+	caps.can_shutdown = 1;
+	caps.display_xres = 132;
+	caps.display_yres = 64;
+//	caps.display_xres = 400;		Grautec lcd
+//	caps.display_yres = 240;		Grautec lcd
+	caps.display_type = HW_DISPLAY_GFX;
+	caps.display_can_deepstandby = 1;
+	caps.display_can_set_brightness = 1;
+	caps.display_has_statusline = 1;
+	caps.display_has_colon = 0;
+	caps.has_button_timer = 1;
+	caps.has_HDMI = 1;		// 2
+	caps.has_HDMI_input = 0;	// 1
+	strcpy(caps.boxvendor, "DM");
+	strcpy(caps.boxname, "7080HD");
+	strcpy(caps.boxarch, "BCM7434");
+#else // generic mips box
+	initialized = 1;
+	caps.has_CI = 1;
+	caps.can_cec = 1;
+	caps.can_shutdown = 1;
+	caps.display_xres = 4;
+	caps.display_has_colon = 1;
+	caps.display_type = HW_DISPLAY_LED_NUM;
+	caps.display_can_deepstandby = 1;
+	caps.display_can_set_brightness = 1;
+	caps.display_has_statusline = 0;
+	caps.has_button_timer = 1;
+	caps.has_HDMI = 1;
+	caps.has_SCART = 1;
+	proc_get("/proc/stb/info/boxtype", caps.boxvendor, 10);
+	proc_get("/proc/stb/info/model", caps.boxname, 10);
+	proc_get("/proc/stb/info/chipset", caps.boxarch, 10);
 #endif
-
 	return &caps;
 }
