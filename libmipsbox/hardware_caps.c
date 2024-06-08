@@ -57,6 +57,46 @@ hw_caps_t *get_hwcaps(void)
 	strcpy(caps.boxvendor, "VU+");
 	strcpy(caps.boxname, "DUO");
 	strcpy(caps.boxarch, "BCM7335");
+#elif BOXMODEL_DM8000
+	initialized = 1;
+	caps.has_CI = 2;
+	caps.can_cec = 0;
+	caps.can_shutdown = 1;
+	caps.display_xres = 132;
+	caps.display_yres = 64;
+//	caps.display_xres = 400;		Grautec lcd
+//	caps.display_yres = 240;		Grautec lcd
+	caps.display_type = HW_DISPLAY_GFX;
+	caps.display_can_deepstandby = 1;
+	caps.display_can_set_brightness = 1;
+	caps.display_has_statusline = 1;
+	caps.display_has_colon = 0;
+	caps.has_button_timer = 1;
+	caps.has_HDMI = 1;			// has only DVI, but works
+	caps.has_SCART = 2;
+//	caps.has_SCART_input = 1;
+//	caps.has_DVI = 1;
+	strcpy(caps.boxvendor, "DM");
+	strcpy(caps.boxname, "8000HD");
+	strcpy(caps.boxarch, "BCM7400D2");
+#elif BOXMODEL_DM820
+	initialized = 1;
+	caps.has_CI = 0;
+	caps.can_cec = 1;
+	caps.can_shutdown = 1;
+	caps.display_xres = 96;
+	caps.display_yres = 64;
+	caps.display_type = HW_DISPLAY_GFX;
+	caps.display_can_deepstandby = 1;
+	caps.display_can_set_brightness = 1;
+	caps.display_has_statusline = 1;
+	caps.display_has_colon = 0;
+	caps.has_button_timer = 1;
+	caps.has_HDMI = 1;		// 2
+	caps.has_HDMI_input = 0;	// 1
+	strcpy(caps.boxvendor, "DM");
+	strcpy(caps.boxname, "820HD");
+	strcpy(caps.boxarch, "BCM7434");
 #endif
 
 	return &caps;

@@ -163,7 +163,7 @@ AC_ARG_WITH(boxtype,
 			BOXTYPE="armbox"
 			BOXMODEL="$withval"
 		;;
-		vuduo|vuduo2|gb800se|osnino|osninoplus|osninopro)
+		vuduo|vuduo2|gb800se|osnino|osninoplus|osninopro|dm820|dm8000)
 			BOXTYPE="mipsbox"
 			BOXMODEL="$withval"
 		;;
@@ -176,7 +176,7 @@ AC_ARG_WITH(boxtype,
 AC_ARG_WITH(boxmodel,
 	AS_HELP_STRING([--with-boxmodel], [valid for generic: raspi])
 AS_HELP_STRING([], [valid for armbox: hd51, multibox, multiboxse, e4hdultra, protek4k, hd60, hd61, bre2ze4k, osmini4k, osmio4k, osmio4kplus, h7, vusolo4k, vuduo4k, vuduo4kse, vuultimo4k, vuzero4k, vuuno4kse, vuuno4k, sf8008, sf8008m, ustym4kpro, h9combo, h9)])
-AS_HELP_STRING([], [valid for mipsbox: vuduo, vuduo2, gb800se, osnino, osninoplus, osninopro])
+AS_HELP_STRING([], [valid for mipsbox: vuduo, vuduo2, gb800se, osnino, osninoplus, osninopro, dm820, dm8000])
 AS_HELP_STRING([], [valid for generic: raspi]),
 	[case "${withval}" in
 		hd51|multibox|multiboxse|e4hdultra|protek4k|hd60|hd61|bre2ze4k|osmini4k|osmio4k|osmio4kplus|h7|vusolo4k|vuduo4k|vuduo4kse|vuultimo4k|vuzero4k|vuuno4kse|vuuno4k|sf8008|sf8008m|ustym4kpro|h9combo|h9)
@@ -186,7 +186,7 @@ AS_HELP_STRING([], [valid for generic: raspi]),
 				AC_MSG_ERROR([unknown model $withval for boxtype $BOXTYPE])
 			fi
 		;;
-		vuduo|vuduo2|gb800se|osnino|osninoplus|osninopro)
+		vuduo|vuduo2|gb800se|osnino|osninoplus|osninopro|dm820|dm8000)
 			if test "$BOXTYPE" = "mipsbox"; then
 				BOXMODEL="$withval"
 			else
@@ -242,6 +242,9 @@ AM_CONDITIONAL(BOXMODEL_GB800SE, test "$BOXMODEL" = "gb800se")
 AM_CONDITIONAL(BOXMODEL_OSNINO, test "$BOXMODEL" = "osnino")
 AM_CONDITIONAL(BOXMODEL_OSNINOPLUS, test "$BOXMODEL" = "osninoplus")
 AM_CONDITIONAL(BOXMODEL_OSNINOPRO, test "$BOXMODEL" = "osninopro")
+
+AM_CONDITIONAL(BOXMODEL_DM820, test "$BOXMODEL" = "dm820")
+AM_CONDITIONAL(BOXMODEL_DM8000, test "$BOXMODEL" = "dm8000")
 
 AM_CONDITIONAL(BOXMODEL_SF8008, test "$BOXMODEL" = "sf8008")
 AM_CONDITIONAL(BOXMODEL_SF8008M, test "$BOXMODEL" = "sf8008m")
@@ -313,6 +316,10 @@ elif test "$BOXMODEL" = "osninoplus"; then
 elif test "$BOXMODEL" = "osninopro"; then
 	AC_DEFINE(BOXMODEL_OSNINOPRO, 1, [osninopro])
 elif test "$BOXMODEL" = "raspi"; then
+elif test "$BOXMODEL" = "dm820"; then
+	AC_DEFINE(BOXMODEL_DM820, 1, [dm820])
+elif test "$BOXMODEL" = "dm8000"; then
+	AC_DEFINE(BOXMODEL_DM8000, 1, [dm8000])
 	AC_DEFINE(BOXMODEL_RASPI, 1, [raspberry pi])
 elif test "$BOXMODEL" = "osmini4k"; then
 	AC_DEFINE(BOXMODEL_OSMINI4K, 1, [osmini4k])
