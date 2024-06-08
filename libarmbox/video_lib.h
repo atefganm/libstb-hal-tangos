@@ -5,6 +5,7 @@
 #include "cs_types.h"
 #include "dmx_hal.h"
 
+#if BOXMODEL_VUPLUS_ARM || BOXMODEL_DM820 || BOXMODEL_DM900
 typedef struct cs_vs_format_t
 {
 	char format[16];
