@@ -36,6 +36,7 @@
 #include <linux/fb.h>
 #include "video_lib.h"
 #include "hal_debug.h"
+#include "hdmi_cec.h"
 
 #include <hardware_caps.h>
 #include <proc_tools.h>
@@ -43,6 +44,7 @@
 extern "C"
 {
 #include <libavformat/avformat.h>
+#include <libavcodec/version.h>
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
@@ -53,17 +55,17 @@ extern "C"
 #define hal_debug_c(args...) _hal_debug(HAL_DEBUG_VIDEO, NULL, args)
 #define hal_info_c(args...) _hal_info(HAL_DEBUG_VIDEO, NULL, args)
 
-#define fop(cmd, args...) ({				\
-		int _r;						\
-		if (fd >= 0) { 					\
-			if ((_r = ::cmd(fd, args)) < 0)		\
-				hal_info(#cmd"(fd, "#args")\n");\
-			else					\
-				hal_debug(#cmd"(fd, "#args")\n");\
-		}						\
-		else { _r = fd; } 				\
-		_r;						\
-	})
+#define fop(cmd, args...) ({                \
+    int _r;                     \
+    if (fd >= 0) {                  \
+        if ((_r = ::cmd(fd, args)) < 0)     \
+            hal_info(#cmd"(fd, "#args")\n");\
+        else                    \
+            hal_debug(#cmd"(fd, "#args")\n");\
+    }                       \
+    else { _r = fd; }               \
+    _r;                     \
+})
 
 #ifndef VIDEO_GET_SIZE
 #define VIDEO_GET_SIZE             _IOR('o', 55, video_size_t)
@@ -174,27 +176,28 @@ static const char *VMPEG_visible[] =
 
 static const char *vid_modes[] =
 {
-	"pal",		// VIDEO_STD_NTSC
-	"pal",		// VIDEO_STD_SECAM
-	"pal",		// VIDEO_STD_PAL
-	"480p",		// VIDEO_STD_480P
-	"576p50",	// VIDEO_STD_576P
-	"720p60",	// VIDEO_STD_720P60
-	"1080i60",	// VIDEO_STD_1080I60
-	"720p50",	// VIDEO_STD_720P50
-	"1080i50",	// VIDEO_STD_1080I50
-	"1080p30",	// VIDEO_STD_1080P30
-	"1080p24",	// VIDEO_STD_1080P24
-	"1080p25",	// VIDEO_STD_1080P25
-	"1080p50",	// VIDEO_STD_1080P50
-	"1080p60",	// VIDEO_STD_1080P60
-	"1080p2397",	// VIDEO_STD_1080P2397
-	"1080p2997",	// VIDEO_STD_1080P2997
-	"2160p24",	// VIDEO_STD_2160P24
-	"2160p25",	// VIDEO_STD_2160P25
-	"2160p30",	// VIDEO_STD_2160P30
-	"2160p50",	// VIDEO_STD_2160P50
-	"720p50"	// VIDEO_STD_AUTO
+	"pal",      // VIDEO_STD_NTSC
+	"pal",      // VIDEO_STD_PAL
+	"pal",      // VIDEO_STD_SECAM
+	"480p",     // VIDEO_STD_480P
+	"576p50",   // VIDEO_STD_576P
+	"720p50",   // VIDEO_STD_720P50
+	"720p60",   // VIDEO_STD_720P60
+	"1080i25",  // VIDEO_STD_1080I25
+	"1080i50",  // VIDEO_STD_1080I50
+	"1080i60",  // VIDEO_STD_1080I60
+	"1080p24",  // VIDEO_STD_1080P24
+	"1080p25",  // VIDEO_STD_1080P25
+	"1080p30",  // VIDEO_STD_1080P30
+	"1080p50",  // VIDEO_STD_1080P50
+	"1080p60",  // VIDEO_STD_1080P60
+	"2160p24",  // VIDEO_STD_2160P24
+	"2160p25",  // VIDEO_STD_2160P25
+	"2160p30",  // VIDEO_STD_2160P30
+	"2160p50",  // VIDEO_STD_2160P50
+	"2160p60",  // VIDEO_STD_2160P60
+	"720p50",   // VIDEO_STD_AUTO
+	NULL
 };
 
 #define VIDEO_STREAMTYPE_MPEG2 0
@@ -239,7 +242,10 @@ void init_parameters(AVFrame *in_frame, AVCodecContext *codec_context)
 	codec_context->width = (in_frame->width / 2) * 2;
 	codec_context->height = (in_frame->height / 2) * 2;
 	/* frames per second */
-	codec_context->time_base = (AVRational) { 1, 60 };
+	codec_context->time_base = (AVRational)
+	{
+		1, 60
+	};
 	codec_context->gop_size = 10; /* emit one intra frame every ten frames */
 	codec_context->max_b_frames = 1;
 	codec_context->pix_fmt = AV_PIX_FMT_YUV420P;
@@ -374,7 +380,7 @@ AVCodecContext *open_codec(AVMediaType mediaType, AVFormatContext *formatContext
 #endif
 	AVCodecContext *codecContext = NULL;
 	int stream_index;
-#if (LIBAVFORMAT_VERSION_INT < AV_VERSION_INT( 57,25,101 ))
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(57,25,101)
 	stream_index = av_find_best_stream(formatContext, mediaType, -1, -1, NULL, 0);
 	if (stream_index >= 0)
 	{
@@ -516,6 +522,7 @@ cVideo::cVideo(int, void *, void *, unsigned int unit)
 	saturation = -1;
 	hue = -1;
 	video_standby = 0;
+	blank_mode = 0;
 	hw_caps_t *hwcaps = get_hwcaps();
 	if (unit > (unsigned int) hwcaps->pip_devs)
 	{
@@ -538,6 +545,8 @@ cVideo::~cVideo(void)
 	if (fd >= 0)
 		setAVInput(AUX);
 #endif
+	if (hdmi_cec::getInstance()->standby_cec_activ && fd >= 0)
+		hdmi_cec::getInstance()->SetCECState(true);
 
 	closeDevice();
 }
@@ -577,13 +586,9 @@ void cVideo::closeDevice(void)
 
 int cVideo::setAspectRatio(int aspect, int mode)
 {
-	static const char *a[] = { "n/a", "4:3", "14:9", "16:9" };
+	static const char *a[] = { "n/a", "4:3", "16:9" };
 //	static const char *m[] = { "panscan", "letterbox", "bestfit", "nonlinear", "(unset)" };
-#if BOXMODEL_OSMIO4K || BOXMODEL_OSMIO4KPLUS
-	static const char *m[] = { "letterbox", "panscan", "scale", "(unset)", "(unset)" };
-#else
 	static const char *m[] = { "letterbox", "panscan", "bestfit", "nonlinear", "(unset)" };
-#endif
 	int n;
 
 	int mo = (mode < 0 || mode > 3) ? 4 : mode;
@@ -601,13 +606,9 @@ int cVideo::setAspectRatio(int aspect, int mode)
 
 	if (mode == -1)
 		return 0;
-#if BOXMODEL_OSMIO4K || BOXMODEL_OSMIO4KPLUS
-	hal_debug("%s: /proc/stb/video/policy2 -> %s\n", __func__, m[mo]);
-	n = proc_put("/proc/stb/video/policy2", m[mo], strlen(m[mo]));
-#else
+
 	hal_debug("%s: /proc/stb/video/policy -> %s\n", __func__, m[mo]);
 	n = proc_put("/proc/stb/video/policy", m[mo], strlen(m[mo]));
-#endif
 	if (n < 0)
 		return 1;
 	return 0;
@@ -666,9 +667,6 @@ int cVideo::Start(void * /*PcrChannel*/, unsigned short /*PcrPid*/, unsigned sho
 	playstate = VIDEO_PLAYING;
 	fop(ioctl, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_DEMUX);
 	int res = fop(ioctl, VIDEO_PLAY);
-#if BOXMODEL_HISILICON
-	fop(ioctl, VIDEO_CONTINUE);
-#endif
 	if (brightness > -1)
 	{
 		SetControl(VIDEO_CONTROL_BRIGHTNESS, brightness);
@@ -689,6 +687,7 @@ int cVideo::Start(void * /*PcrChannel*/, unsigned short /*PcrPid*/, unsigned sho
 		SetControl(VIDEO_CONTROL_HUE, hue);
 		hue = -1;
 	}
+	blank_mode = 0;
 	return res;
 }
 
@@ -701,16 +700,22 @@ int cVideo::Stop(bool blank)
 		return -1;
 	}
 	playstate = blank ? VIDEO_STOPPED : VIDEO_FREEZED;
+	blank_mode = blank;
 	return fop(ioctl, VIDEO_STOP, blank ? 1 : 0);
 }
 
-int cVideo::setBlank(int)
+int cVideo::setBlank(int enable)
 {
 	fop(ioctl, VIDEO_PLAY);
 	fop(ioctl, VIDEO_CONTINUE);
-	video_still_picture sp = { NULL, 0 };
-	fop(ioctl, VIDEO_STILLPICTURE, &sp);
-	return Stop(1);
+	if (enable)
+	{
+		video_still_picture sp = { NULL, 0 };
+		fop(ioctl, VIDEO_STILLPICTURE, &sp);
+		return Stop(1);
+	}
+	else
+		return Start();
 }
 
 int cVideo::SetVideoSystem(int video_system, bool remember)
@@ -773,31 +778,6 @@ void cVideo::GetVideoSystemFormatName(cs_vs_format_t *format, int system)
 int cVideo::getPlayState(void)
 {
 	return playstate;
-}
-
-void cVideo::SetVideoMode(analog_mode_t mode)
-{
-	hal_debug("#%d: %s(%d)\n", devnum, __func__, mode);
-	if (!(mode & ANALOG_SCART_MASK))
-	{
-		hal_debug("%s: non-SCART mode ignored\n", __func__);
-		return;
-	}
-	const char *m;
-	switch (mode)
-	{
-		case ANALOG_SD_YPRPB_SCART:
-			m = "yuv";
-			break;
-		case ANALOG_SD_RGB_SCART:
-			m = "rgb";
-			break;
-		default:
-			hal_info("%s unknown mode %d\n", __func__, mode);
-			m = "rgb";
-			break; /* default to rgb */
-	}
-	proc_put("/proc/stb/avs/0/colorformat", m, strlen(m));
 }
 
 bool cVideo::ShowPicture(const char *fname)
@@ -872,26 +852,30 @@ void cVideo::Standby(unsigned int bOn)
 #endif
 	}
 	video_standby = bOn;
+	hdmi_cec::getInstance()->SetCECState(video_standby);
 }
 
 int cVideo::getBlank(void)
 {
+#if 0
 	int ret = proc_get_hex(VMPEG_xres[devnum]);
 	hal_debug("%s => %d\n", __func__, !ret);
 	return !ret;
+#else
+	hal_debug("%s => %d\n", __func__, blank_mode);
+	return blank_mode;
+#endif
 }
 
 void cVideo::QuadPiP(bool active, int _x, int _y, int _w, int _h)
 {
 	char buffer[64];
 	int _a = 1;
-	if (active)
-	{
+	if (active) {
 #if BOXMODEL_VUSOLO4K || BOXMODEL_VUDUO4K || BOXMODEL_VUDUO4KSE || BOXMODEL_VUULTIMO4K || BOXMODEL_VUUNO4KSE || BOXMODEL_VUUNO4K
 		proc_put("/proc/stb/video/decodermode", "mosaic", strlen("mosaic"));
 #endif
-		for (unsigned int i = 0; i < 4; i++)
-		{
+		for (unsigned int i = 0; i < 4; i++) {
 			sprintf(buffer, "%x", _x);
 			proc_put(VMPEG_dst_left[i], buffer, strlen(buffer));
 			sprintf(buffer, "%x", _y);
@@ -903,11 +887,8 @@ void cVideo::QuadPiP(bool active, int _x, int _y, int _w, int _h)
 			sprintf(buffer, "%x", _a);
 			proc_put(VMPEG_dst_apply[i], buffer, strlen(buffer));
 		}
-	}
-	else
-	{
-		for (unsigned int i = 0; i < 4; i++)
-		{
+	} else {
+		for (unsigned int i = 0; i < 4; i++) {
 			sprintf(buffer, "%x", 0);
 			proc_put(VMPEG_dst_left[i], buffer, strlen(buffer));
 			sprintf(buffer, "%x", 0);
@@ -930,8 +911,6 @@ void cVideo::ShowPig(int _x)
 	char buffer[64];
 	sprintf(buffer, "%d", _x);
 	proc_put(VMPEG_visible[devnum], buffer, strlen(buffer));
-	if (_x == 0)
-		Pig(0,0,0,0);
 }
 
 void cVideo::Pig(int x, int y, int w, int h, int osd_w, int osd_h, int startx, int starty, int endx, int endy)
@@ -1171,44 +1150,26 @@ void cVideo::SetControl(int control, int value)
 	}
 }
 
-#if BOXMODEL_VUPLUS_ARM || BOXMODEL_DM820 || BOXMODEL_DM900
-void cVideo::SetColorFormat(COLOR_FORMAT color_format)
+#if BOXMODEL_VUPLUS_ARM || BOXMODEL_DM820 || BOXMODEL_DM7080 || BOXMODEL_DM900 || BOXMODEL_DM920
+void cVideo::SetHDMIColorimetry(HDMI_COLORIMETRY hdmi_colorimetry)
 {
 	const char *p = NULL;
-	switch (color_format)
+	switch (hdmi_colorimetry)
 	{
-		case COLORFORMAT_RGB:
-			p = "rgb";
+		case HDMI_COLORIMETRY_AUTO:
+			p = "Edit(Auto)";
 			break;
-		case COLORFORMAT_YUV:
-			p = "yuv";
+		case HDMI_COLORIMETRY_BT709:
+			p = "Itu_R_BT_709";
 			break;
-		case COLORFORMAT_CVBS:
-			p = "cvbs";
-			break;
-		case COLORFORMAT_SVIDEO:
-			p = "svideo";
-			break;
-		case COLORFORMAT_HDMI_AUTO:
-			p = "Edid(Auto)";
-			break;
-		case COLORFORMAT_HDMI_RGB:
-			p = "Hdmi_Rgb";
-			break;
-		case COLORFORMAT_HDMI_YCBCR444:
-			p = "444";
-			break;
-		case COLORFORMAT_HDMI_YCBCR422:
-			p = "422";
-			break;
-		case COLORFORMAT_HDMI_YCBCR420:
-			p = "420";
+		case HDMI_COLORIMETRY_BT470:
+			p = "Itu_R_BT_470_2_BG";
 			break;
 	}
 	if (p)
 		proc_put("/proc/stb/video/hdmi_colorspace", p, strlen(p));
 }
-
+#else
 void cVideo::SetHDMIColorimetry(HDMI_COLORIMETRY hdmi_colorimetry)
 {
 	const char *p = NULL;
@@ -1230,6 +1191,7 @@ void cVideo::SetHDMIColorimetry(HDMI_COLORIMETRY hdmi_colorimetry)
 	if (p)
 		proc_put("/proc/stb/video/hdmi_colorimetry", p, strlen(p));
 }
+#endif
 
 bool getvideo2(unsigned char *video, int xres, int yres)
 {
@@ -1369,12 +1331,6 @@ void get_osd_buf(unsigned char *osd_data)
 		// get 32bit framebuffer
 		memcpy(osd_data, lfb, fix_screeninfo.line_length * var_screeninfo.yres);
 	}
-
-	if (munmap(lfb, fix_screeninfo.smem_len) == -1)
-	{
-		perror("Error un-mmapping");
-	}
-
 	close(fb);
 }
 
@@ -1390,12 +1346,12 @@ inline void rgb24torgb32(unsigned char  *src, unsigned char *dest, int picsize)
 }
 
 /* TODO: aspect ratio correction and PIP */
-bool cVideo::GetScreenImage(unsigned char *&out_data, int &xres, int &yres, bool get_video, bool get_osd, bool scale_to_video)
+bool cVideo::GetScreenImage(unsigned char*&out_data, int &xres, int &yres, bool get_video, bool get_osd, bool scale_to_video)
 {
 #define VDEC_PIXFMT AV_PIX_FMT_BGR24
 
 	hal_info("%s: out_data 0x%p xres %d yres %d vid %d osd %d scale %d\n",
-		__func__, out_data, xres, yres, get_video, get_osd, scale_to_video);
+	    __func__, out_data, xres, yres, get_video, get_osd, scale_to_video);
 	int aspect = 0;
 	getPictureInfo(xres, yres, aspect); /* aspect is dummy here */
 	aspect = getAspectRatio();
@@ -1427,7 +1383,8 @@ bool cVideo::GetScreenImage(unsigned char *&out_data, int &xres, int &yres, bool
 
 	if (get_video)
 	{
-		const int grab_w = 1920; const int grab_h = 1080; //hd51 video0 is always 1920x1080
+		const int grab_w = 1920;
+		const int grab_h = 1080; //hd51 video0 is always 1920x1080
 		unsigned char *video_src = (unsigned char *)malloc(grab_w * grab_h * 3);
 		if (video_src == NULL)
 			return false;
@@ -1503,11 +1460,13 @@ bool cVideo::GetScreenImage(unsigned char *&out_data, int &xres, int &yres, bool
 				{
 					uint8_t *in = (uint8_t *)(pixpos);
 					uint8_t *out = (uint8_t *)d;
-					int a = in[3];	/* TODO: big/little endian? */
+					int a = in[3];  /* TODO: big/little endian? */
 					*out = (*out + ((*in - *out) * a) / 256);
-					in++; out++;
+					in++;
+					out++;
 					*out = (*out + ((*in - *out) * a) / 256);
-					in++; out++;
+					in++;
+					out++;
 					*out = (*out + ((*in - *out) * a) / 256);
 				}
 				d++;
@@ -1522,4 +1481,29 @@ bool cVideo::GetScreenImage(unsigned char *&out_data, int &xres, int &yres, bool
 		free(osd_data);
 
 	return true;
+}
+
+bool cVideo::SetCECMode(VIDEO_HDMI_CEC_MODE _deviceType)
+{
+	return hdmi_cec::getInstance()->SetCECMode(_deviceType);
+}
+
+void cVideo::SetCECAutoStandby(bool state)
+{
+	hdmi_cec::getInstance()->SetCECAutoStandby(state);
+}
+
+void cVideo::SetCECAutoView(bool state)
+{
+	hdmi_cec::getInstance()->SetCECAutoView(state);
+}
+
+int cVideo::GetAudioDestination()
+{
+	return (int)hdmi_cec::getInstance()->GetAudioDestination();
+}
+
+void cVideo::SetAudioDestination(int audio_dest)
+{
+	hdmi_cec::getInstance()->SetAudioDestination(audio_dest);
 }
