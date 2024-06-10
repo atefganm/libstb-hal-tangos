@@ -323,6 +323,7 @@ elif test "$BOXMODEL" = "osninoplus"; then
 elif test "$BOXMODEL" = "osninopro"; then
 	AC_DEFINE(BOXMODEL_OSNINOPRO, 1, [osninopro])
 elif test "$BOXMODEL" = "raspi"; then
+	AC_DEFINE(BOXMODEL_RASPI, 1, [raspberry pi])
 elif test "$BOXMODEL" = "dm820"; then
 	AC_DEFINE(BOXMODEL_DM820, 1, [dm820])
 elif test "$BOXMODEL" = "dm7080"; then
@@ -333,7 +334,6 @@ elif test "$BOXMODEL" = "dm920"; then
 	AC_DEFINE(BOXMODEL_DM920, 1, [dm920])
 elif test "$BOXMODEL" = "dm8000"; then
 	AC_DEFINE(BOXMODEL_DM8000, 1, [dm8000])
-	AC_DEFINE(BOXMODEL_RASPI, 1, [raspberry pi])
 elif test "$BOXMODEL" = "osmini4k"; then
 	AC_DEFINE(BOXMODEL_OSMINI4K, 1, [osmini4k])
 elif test "$BOXMODEL" = "osmio4k"; then
